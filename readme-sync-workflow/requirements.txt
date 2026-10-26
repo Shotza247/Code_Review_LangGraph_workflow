@@ -1,0 +1,8 @@
+langgraph>=0.2
+requests>=2.31
+PyYAML>=6.0
+python-dotenv>=1.0
+openai>=1.40
+huggingface_hub>=0.24
+streamlit>=1.36
+pytest>=8.0
