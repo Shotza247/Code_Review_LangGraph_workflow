@@ -1,0 +1,21 @@
+# Local editor and notebook state
+.vscode/
+.notebook/
+
+# Runtime/crash logs
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local environments
+.venv/
+readme-sync-workflow/.venv/
+
+# Generated workflow outputs
+readme-sync-workflow/outputs/*
+!readme-sync-workflow/outputs/.gitkeep

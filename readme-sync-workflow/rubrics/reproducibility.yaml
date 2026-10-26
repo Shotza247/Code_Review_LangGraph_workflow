@@ -1,0 +1,27 @@
+# Swap this file per project type. Weights must sum to 100.
+name: reproducibility
+criteria:
+  - id: overview
+    weight: 10
+    description: Clear statement of what the project does and who it is for.
+  - id: prerequisites
+    weight: 15
+    description: Required language/runtime versions, system packages, accounts, and hardware.
+  - id: install
+    weight: 20
+    description: Exact, ordered install/setup commands that work from a fresh clone.
+  - id: configuration
+    weight: 15
+    description: Environment variables, config files, secrets, and where to get them.
+  - id: run
+    weight: 15
+    description: Exact commands to run the project, with expected inputs.
+  - id: expected_output
+    weight: 10
+    description: What success looks like (sample output, screenshots, ports, files produced).
+  - id: verification
+    weight: 10
+    description: Tests or a smoke check to confirm the setup works.
+  - id: troubleshooting
+    weight: 5
+    description: Known issues, common errors, and fixes.

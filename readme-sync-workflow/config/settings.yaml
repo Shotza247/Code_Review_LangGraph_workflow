@@ -1,0 +1,57 @@
+# ---- LLM adapter -----------------------------------------------------------
+# Switch providers here (or with --provider on the CLI). Nodes never import a
+# provider directly; they only talk to the LLMAdapter interface.
+llm:
+  provider: huggingface        # huggingface | openai
+  huggingface:
+    model: Qwen/Qwen3-4B-Instruct-2507:nscale   # example only: confirm it is available on your HF free tier
+    max_tokens: 3000
+    temperature: 0.2
+  openai:
+    model: gpt-4o-mini
+    max_tokens: 3000
+    temperature: 0.2
+
+# ---- Repo reading limits (keep small for small/free models) ----------------
+github:
+  max_files: 40                # files sampled for codebase analysis
+  max_chars_per_file: 6000
+  batch_chars: 20000           # characters per "map" batch sent to the LLM
+  max_tree_lines: 300          # file-tree lines included in prompts
+
+# ---- Optional PR step ------------------------------------------------------
+pr:
+  mode: "off"                  # off | fork | direct   (fork/direct need GITHUB_TOKEN)
+  branch_name: readme-sync/update
+  commit_message: "docs: sync README with codebase (readme-sync-workflow)"
+  title: "docs: reproducibility-focused README update"
+  include_course_plan: true
+  course_plan_path: docs/COURSE_PLAN.md
+
+# ---- Diagram node ----------------------------------------------------------
+diagrams:
+  - name: architecture
+    title: Architecture overview
+    type: flowchart
+    description: Main components/modules and how they depend on each other.
+  - name: runtime_flow
+    title: Runtime flow
+    type: sequenceDiagram
+    description: What happens, step by step, when the project is run (entry point to output).
+  - name: setup_flow
+    title: Setup and reproduction flow
+    type: flowchart
+    description: The steps a newcomer follows from clone to a working run.
+
+# ---- Mermaid validation (mmdc = @mermaid-js/mermaid-cli) --------------------
+# auto     : validate/render with mmdc if installed, otherwise fall back to a light structural check
+# required : fail if mmdc cannot run
+# off      : structural check only
+mermaid_validation:
+  mode: auto
+  max_repairs: 2               # times a failing diagram is sent back to the LLM with the mmdc error
+  timeout_s: 60
+  mmdc_path: null              # default: look up "mmdc" on PATH
+  puppeteer_config: null       # e.g. config/puppeteer-config.json (needed in Docker/root/WSL)
+
+outputs_dir: outputs
