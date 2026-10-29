@@ -65,6 +65,20 @@ class FakeLLM(LLMAdapter):
                 "inaccurate": [],
                 "covered_well": [],
             }),
+            "course_guide": "# Step-by-step guide\n\n1. Inspect `main.py`.\n",
+            "interactive_course": (
+                "# Interactive course: demo\n\n"
+                "## Lesson 1: Repository map\n\n"
+                "Goal: Find the entry point.\n\n"
+                "Files: `main.py`.\n\n"
+                "Exercise: Read the entry point.\n\n"
+                "Checkpoint: Explain the main flow.\n\n"
+                "## Lesson 2: Run and verify\n\n"
+                "Goal: Identify how to run the project.\n\n"
+                "Files: `requirements.txt`.\n\n"
+                "Exercise: Review setup evidence.\n\n"
+                "Checkpoint: List unknown setup details.\n"
+            ),
             "readme_rerate": "```json\n" + json.dumps(RATING) + "\n```",  # fenced on purpose
             "course_plan": "# Course plan: demo",
             "readme_sync": "# Demo\n\n## Project structure\n\n<!-- DIAGRAMS:START -->\n<!-- DIAGRAMS:END -->\n",

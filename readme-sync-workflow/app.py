@@ -1,11 +1,9 @@
 """Streamlit UI. Run with:  streamlit run app.py"""
 import difflib
-import html
 import sys
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
@@ -19,15 +17,6 @@ from readme_sync.runner import NODE_LABELS, stream_run  # noqa: E402
 from readme_sync.utils.outputs import zip_dir  # noqa: E402
 
 st.set_page_config(page_title="README Sync Workflow", page_icon="📘", layout="wide")
-
-
-def mermaid_html(code: str) -> str:
-    return (
-        f'<pre class="mermaid">{html.escape(code)}</pre>'
-        "<script type=\"module\">"
-        "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';"
-        "mermaid.initialize({startOnLoad:true});</script>"
-    )
 
 
 # ------------------------------------------------------------------ sidebar
@@ -70,12 +59,24 @@ if run:
         gh = GitHubClient(token=gh_token or None)
         state: dict = {}
         with st.status("Running...", expanded=True) as status:
-            for node, state in stream_run(settings, repo_url.strip(), llm=llm, gh=gh):
+            for node, state in stream_run(
+                settings,
+                repo_url.strip(),
+                llm=llm,
+                gh=gh,
+                initial_state={"repo_url": repo_url.strip(), "await_course_choice": True},
+            ):
                 st.write(f"Done: {NODE_LABELS[node]}")
-            status.update(label="Finished", state="complete", expanded=False)
+            waiting = "code_summary" in state and "course_plan" not in state
+            status.update(
+                label="Assessment complete; choose a course format" if waiting else "Finished",
+                state="complete",
+                expanded=waiting,
+            )
         st.session_state["result"] = state
         st.session_state["settings"] = settings
         st.session_state["gh"] = gh
+        st.session_state["llm"] = llm
     except Exception as exc:  # surface any node failure instead of a stack trace
         st.error(f"Run failed: {exc}")
 
@@ -165,29 +166,69 @@ if result:
             st.write(understanding["unknowns"])
 
     with t_readme:
-        view = st.radio("View", ["Rendered", "Diff vs original", "Markdown source"], horizontal=True)
-        if view == "Rendered":
-            st.markdown(result["readme_synced"])
-        elif view == "Diff vs original":
-            diff = difflib.unified_diff(
-                result["readme_original"].splitlines(),
-                result["readme_synced"].splitlines(),
-                "README (original)",
-                "README (new)",
-                lineterm="",
-            )
-            st.code("\n".join(diff) or "No changes", language="diff")
+        if "readme_synced" not in result:
+            st.info("Generate a course or guide first; the README is created immediately afterward.")
         else:
-            st.code(result["readme_synced"], language="markdown")
-        st.download_button("Download README.new.md", result["readme_synced"], file_name="README.new.md")
+            view = st.radio("View", ["Rendered", "Diff vs original", "Markdown source"], horizontal=True)
+            if view == "Rendered":
+                st.markdown(result["readme_synced"])
+            elif view == "Diff vs original":
+                diff = difflib.unified_diff(
+                    result["readme_original"].splitlines(),
+                    result["readme_synced"].splitlines(),
+                    "README (original)",
+                    "README (new)",
+                    lineterm="",
+                )
+                st.code("\n".join(diff) or "No changes", language="diff")
+            else:
+                st.code(result["readme_synced"], language="markdown")
+            st.download_button("Download README.new.md", result["readme_synced"], file_name="README.new.md")
 
     with t_course:
-        st.markdown(result["course_plan"])
-        st.download_button("Download course_plan.md", result["course_plan"], file_name="course_plan.md")
+        if "course_plan" not in result:
+            st.write("The repository assessment is ready. Choose how you want the learning material generated.")
+            mode = st.radio(
+                "Course format",
+                ["Step-by-step guide", "Interactive course"],
+                key="course_mode_choice",
+                help="The interactive option creates a course index and linked lesson files.",
+            )
+            st.caption("Only the selected format is generated, to avoid duplicate model calls and token use.")
+            if st.button("Generate selected format"):
+                selected_mode = "interactive" if mode == "Interactive course" else "guide"
+                resume_state = {**result, "course_mode": selected_mode}
+                settings = st.session_state["settings"]
+                with st.status("Generating selected course format...", expanded=True) as status:
+                    for node, resumed in stream_run(
+                        settings,
+                        result["repo_url"],
+                        llm=st.session_state["llm"],
+                        gh=st.session_state["gh"],
+                        initial_state=resume_state,
+                    ):
+                        st.write(f"Done: {NODE_LABELS[node]}")
+                    status.update(label="Workflow complete", state="complete", expanded=False)
+                st.session_state["result"] = resumed
+                st.rerun()
+        else:
+            st.markdown(result["course_plan"])
+            filename = "interactive_course_index.md" if result.get("course_mode") == "interactive" else "step_by_step_guide.md"
+            st.download_button("Download course artifact", result["course_plan"], file_name=filename)
+            for lesson in result.get("interactive_course", {}).get("lessons", []):
+                lesson_path = Path(result["output_dir"]) / lesson
+                st.download_button(
+                    f"Download {lesson_path.stem.replace('-', ' ').title()}",
+                    lesson_path.read_text(encoding="utf-8"),
+                    file_name=lesson_path.name,
+                    key=f"download_{lesson_path.name}",
+                )
 
     with t_diag:
         svgs = result.get("diagram_svgs", {})
-        if not result.get("diagrams"):
+        if "diagrams" not in result:
+            st.info("Diagrams are generated after the selected course format.")
+        elif not result.get("diagrams"):
             st.info("No diagrams were produced. See the warnings above.")
         for name, code in result.get("diagrams", {}).items():
             st.subheader(name.replace("_", " ").title())
@@ -202,7 +243,9 @@ if result:
                 st.code(code, language="text")
 
     with t_pr:
-        if result.get("pr_url"):
+        if "readme_synced" not in result:
+            st.info("Complete the selected course format to prepare the README and pull request.")
+        elif result.get("pr_url"):
             st.success(f"Pull request opened: {result['pr_url']}")
         else:
             st.write("Review the outputs first. Opening a PR writes to GitHub.")

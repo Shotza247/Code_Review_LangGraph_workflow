@@ -13,10 +13,49 @@ def test_stream_run_order_and_state(tmp_path):
     s["outputs_dir"] = str(tmp_path)
     s["mermaid_validation"] = {"mode": "off"}
     steps = list(stream_run(s, "https://github.com/o/r", llm=FakeLLM(), gh=FakeGH()))
-    assert [n for n, _ in steps] == ["readme_audit", "codebase_analysis", "course_plan", "readme_sync", "diagrams"]
+    assert [n for n, _ in steps] == [
+        "readme_audit",
+        "codebase_analysis",
+        "course_choice",
+        "course_guide",
+        "readme_sync",
+        "diagrams",
+    ]
     final = steps[-1][1]
     assert final["readme_rating_v1"]["score"] == 40 and "diagrams" in final
     assert zip_dir(final["output_dir"])[:2] == b"PK"
+
+
+def test_stream_run_pauses_after_assessment_and_resumes_selected_branch(tmp_path):
+    settings = copy.deepcopy(load_settings(overrides={"pr.mode": "off"}))
+    settings["outputs_dir"] = str(tmp_path)
+    settings["mermaid_validation"] = {"mode": "off"}
+    llm, gh = FakeLLM(), FakeGH()
+    first_pass = list(
+        stream_run(
+            settings,
+            "https://github.com/o/r",
+            llm=llm,
+            gh=gh,
+            initial_state={"repo_url": "https://github.com/o/r", "await_course_choice": True},
+        )
+    )
+    assessment_state = first_pass[-1][1]
+    assert [node for node, _ in first_pass] == ["readme_audit", "codebase_analysis", "course_choice"]
+    assert assessment_state["audit_log"][-2]["event"] == "route_decision"
+    assert "course_plan" not in assessment_state
+
+    resumed = list(
+        stream_run(
+            settings,
+            "https://github.com/o/r",
+            llm=llm,
+            gh=gh,
+            initial_state={**assessment_state, "course_mode": "interactive"},
+        )
+    )
+    assert [node for node, _ in resumed] == ["course_choice", "course_plan", "readme_sync", "diagrams"]
+    assert resumed[-1][1]["course_mode"] == "interactive"
 
 
 def test_app_first_render_has_no_errors():
@@ -59,6 +98,14 @@ def test_app_full_run_then_pr_gate(monkeypatch):
     url_box.set_value("https://github.com/o/r").run()
     at.button[0].click().run()
     try:
+        assert not at.exception, at.exception
+        assert not at.error, [e.value for e in at.error]
+        assert "code_summary" in at.session_state["result"]
+        assert "course_plan" not in at.session_state["result"]
+        course_format = [r for r in at.radio if r.label == "Course format"][0]
+        course_format.set_value("Step-by-step guide").run()
+        generate_button = [b for b in at.button if b.label == "Generate selected format"][0]
+        generate_button.click().run()
         assert not at.exception, at.exception
         assert not at.error, [e.value for e in at.error]
         labels = [m.label for m in at.metric]
