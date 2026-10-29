@@ -71,7 +71,7 @@ def audit_node(node: str, func: Callable[[dict[str, Any]], dict[str, Any]]) -> C
     def wrapped(state: dict[str, Any]) -> dict[str, Any]:
         update = func(state) or {}
         event = make_node_audit_event(node, state, update)
-        audit_log = list(state.get("audit_log", [])) + [event]
+        audit_log = list(update.get("audit_log", state.get("audit_log", []))) + [event]
         update["audit_log"] = audit_log
         _emit(event)
         _persist({**state, **update}, audit_log)
@@ -80,14 +80,17 @@ def audit_node(node: str, func: Callable[[dict[str, Any]], dict[str, Any]]) -> C
     return wrapped
 
 
-def audit_decision(state: dict[str, Any], decision: str, reason: str) -> None:
+def audit_decision(
+    state: dict[str, Any], decision: str, reason: str, node: str = "diagrams"
+) -> dict[str, Any]:
     event = {
         "event": "route_decision",
         "timestamp": _now(),
-        "node": "diagrams",
+        "node": node,
         "decision": decision,
         "reason": reason,
     }
     audit_log = list(state.get("audit_log", [])) + [event]
     _emit(event)
     _persist(state, audit_log)
+    return {"audit_log": audit_log}

@@ -6,6 +6,7 @@ class RepoState(TypedDict, total=False):
 
     # input
     repo_url: str
+    await_course_choice: bool
 
     # node 1: readme_audit
     owner: str
@@ -27,7 +28,11 @@ class RepoState(TypedDict, total=False):
     readme_rating_v2: dict[str, Any]
 
     # node 3: course_plan
+    course_mode: str
     course_plan: str
+    course_plan_path: str
+    step_by_step_guide: str
+    interactive_course: dict[str, Any]
 
     # node 4: readme_sync
     readme_synced: str

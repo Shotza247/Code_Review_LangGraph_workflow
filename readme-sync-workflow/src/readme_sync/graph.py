@@ -4,6 +4,7 @@ from .config import load_rubric, pr_mode
 from .github.client import GitHubClient
 from .llm.factory import build_llm
 from .nodes.codebase_analysis import make_codebase_analysis
+from .nodes.course_guide import make_course_guide
 from .nodes.context import Context
 from .nodes.course_plan import make_course_plan
 from .nodes.diagrams import make_diagrams
@@ -29,15 +30,57 @@ def build_graph(settings: dict, llm=None, gh=None, rubric=None):
     graph = StateGraph(RepoState)
     graph.add_node("readme_audit", audit_node("readme_audit", make_readme_audit(ctx)))
     graph.add_node("codebase_analysis", audit_node("codebase_analysis", make_codebase_analysis(ctx)))
+    def record_course_choice(state):
+        mode = state.get("course_mode")
+        if mode == "interactive":
+            decision = "course_plan"
+        elif mode == "guide" or not state.get("await_course_choice", False):
+            decision = "course_guide"
+        else:
+            decision = END
+        return audit_decision(
+            state, decision, f"course_mode={mode or 'awaiting_user_choice'}", node="course_choice"
+        )
+
+    graph.add_node("course_choice", audit_node("course_choice", record_course_choice))
     graph.add_node("course_plan", audit_node("course_plan", make_course_plan(ctx)))
+    graph.add_node("course_guide", audit_node("course_guide", make_course_guide(ctx)))
     graph.add_node("readme_sync", audit_node("readme_sync", make_readme_sync(ctx)))
     graph.add_node("diagrams", audit_node("diagrams", make_diagrams(ctx)))
     graph.add_node("open_pr", audit_node("open_pr", make_open_pr(ctx)))
 
-    graph.add_edge(START, "readme_audit")
+    def route_at_start(state) -> str:
+        if state.get("code_summary"):
+            return "course_choice"
+        return "readme_audit"
+
+    graph.add_conditional_edges(
+        START,
+        route_at_start,
+        {"readme_audit": "readme_audit", "course_choice": "course_choice"},
+    )
     graph.add_edge("readme_audit", "codebase_analysis")
-    graph.add_edge("codebase_analysis", "course_plan")
+    def route_after_assessment(state) -> str:
+        return "course_choice"
+
+    graph.add_conditional_edges(
+        "codebase_analysis",
+        route_after_assessment,
+        {"course_choice": "course_choice"},
+    )
+    graph.add_conditional_edges(
+        "course_choice",
+        lambda state: (
+            "course_plan"
+            if state.get("course_mode") == "interactive"
+            else "course_guide"
+            if state.get("course_mode") == "guide" or not state.get("await_course_choice", False)
+            else END
+        ),
+        {"course_plan": "course_plan", "course_guide": "course_guide", END: END},
+    )
     graph.add_edge("course_plan", "readme_sync")
+    graph.add_edge("course_guide", "readme_sync")
     graph.add_edge("readme_sync", "diagrams")
 
     # conditional edge: only open a PR when pr.mode is fork or direct

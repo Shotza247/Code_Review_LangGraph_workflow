@@ -17,13 +17,14 @@ def main() -> None:
     ap.add_argument("--provider", choices=["huggingface", "openai"])
     ap.add_argument("--model", help="override the model for the chosen provider")
     ap.add_argument("--pr", choices=["off", "fork", "direct"], help="override pr.mode")
+    ap.add_argument("--course-mode", choices=["guide", "interactive"], default="guide")
     args = ap.parse_args()
 
     settings = load_settings(args.config, {"llm.provider": args.provider, "pr.mode": args.pr})
     if args.model:
         settings["llm"][settings["llm"]["provider"]]["model"] = args.model
 
-    result = build_graph(settings).invoke({"repo_url": args.repo_url})
+    result = build_graph(settings).invoke({"repo_url": args.repo_url, "course_mode": args.course_mode})
 
     print(f"\nRepo:            {result['owner']}/{result['repo']}")
     print(f"Rating (README): {result['readme_rating_v1']['score']}/100")

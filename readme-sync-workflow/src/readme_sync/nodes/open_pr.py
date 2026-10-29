@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from ..config import pr_mode
 from ..utils.outputs import save_json
 
@@ -21,7 +23,12 @@ def make_open_pr(ctx):
 
         files = {state["readme_path"]: state["readme_synced"]}
         if cfg.get("include_course_plan"):
-            files[cfg["course_plan_path"]] = state["course_plan"]
+            course_path = state.get("course_plan_path", cfg["course_plan_path"])
+            files[course_path] = state["course_plan"]
+            if state.get("course_mode") == "interactive":
+                for relative_path in state.get("interactive_course", {}).get("lessons", []):
+                    source = Path(state["output_dir"]) / relative_path
+                    files[relative_path] = source.read_text(encoding="utf-8")
         for path, text in files.items():
             ctx.gh.put_file(target_owner, repo, path, text, cfg["commit_message"], branch)
 
