@@ -113,7 +113,7 @@ The analysis is static: repository code is read but not executed, and commands a
 
 After `codebase_analysis`, Streamlit offers two options:
 
-- **Interactive course:** Creates `interactive_course/index.md` and separate lesson Markdown files under `interactive_course/lessons/`, with navigation, exercises, and checkpoints. Its skill is `skills/codebase-to-interactive-course/SKILL.md`.
+- **Interactive course:** Creates `docs/interactive-course/index.md` and separate lesson Markdown files under `docs/interactive-course/lessons/`, with navigation, exercises, and checkpoints. Its skill is `skills/codebase-to-interactive-course/SKILL.md`.
 - **Step-by-step guide:** Creates a short numbered guide using documented setup and code-flow evidence.
 
 Both branches use the same compact assessment state. The simpler guide branch is the CLI default; choose the interactive option in Streamlit or pass `--course-mode interactive` on the CLI.
@@ -149,7 +149,7 @@ npm install -g @mermaid-js/mermaid-cli
 
 | `mermaid_validation.mode` | Behaviour |
 |---|---|
-| `auto` (default) | Use mmdc if it runs; otherwise only a keyword check, and a warning is recorded |
+| `auto` (default) | Use mmdc if it runs; otherwise only a keyword check, with no warning when mmdc is simply missing |
 | `required` | Stop with an error if mmdc is missing or cannot start |
 | `off` | Keyword check only |
 
@@ -163,7 +163,7 @@ Results land in `outputs/<owner>__<repo>/`: `README.new.md`, `audit.json`, `audi
 |---|---|
 | LLM provider or model | `config/settings.yaml` (`llm`) or add an adapter in `src/readme_sync/llm/` |
 | What "good" means | `rubrics/*.yaml` |
-| How the course plan is shaped | `skills/codebase-to-course/` |
+| How the step-by-step guide is shaped | `src/readme_sync/prompts/course_guide.md` |
 | Interactive course format | `skills/codebase-to-interactive-course/` |
 | Token-efficiency guidelines | `skills/token-efficient-readme-sync/` |
 | Which diagrams are made | `config/settings.yaml` (`diagrams`) |
