@@ -11,12 +11,17 @@ def make_readme_audit(ctx):
         branch = info["default_branch"]
         path, readme = ctx.gh.get_readme(ref.owner, ref.repo, branch)
 
-        prompt = render(
-            "readme_audit",
-            rubric=format_rubric(ctx.rubric),
-            readme=readme or "(this repository has no README)",
+        rating = normalize_rating(
+            llm_json(
+                ctx.llm,
+                render(
+                    "readme_audit",
+                    rubric=format_rubric(ctx.rubric),
+                    readme=readme or "(this repository has no README)",
+                ),
+            ),
+            ctx.rubric,
         )
-        rating = normalize_rating(llm_json(ctx.llm, prompt), ctx.rubric)
 
         out = output_dir(ctx.settings, ref.owner, ref.repo)
         save_text(out, "README.original.md", readme)

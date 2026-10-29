@@ -1,8 +1,9 @@
 import json
 
+from ..utils.chains import generate_prompt
 from ..utils.files import batch_by_chars, select_files
 from ..utils.outputs import save_json, save_text
-from ..utils.prompts import SYSTEM, render
+from ..utils.prompts import render
 from ..utils.rating import format_rubric, llm_json, normalize_rating
 
 
@@ -83,12 +84,10 @@ def make_codebase_analysis(ctx):
         notes = []
         for batch in batch_by_chars(items, cfg["batch_chars"]):
             files = "\n\n".join(f"### {p}\n{t}" for p, t in batch)
-            notes.append(ctx.llm.generate(render("code_map", files=files), system=SYSTEM))
+            notes.append(generate_prompt(ctx.llm, "code_map", files=files))
 
         # 3) reduce: one structured summary
-        code_summary = ctx.llm.generate(
-            render("code_reduce", tree=tree_text, notes="\n\n".join(notes)), system=SYSTEM
-        )
+        code_summary = generate_prompt(ctx.llm, "code_reduce", tree=tree_text, notes="\n\n".join(notes))
 
         # 4) assess documentation gaps, code quality, reproducibility, and architecture together
         errors = list(state.get("errors", []))

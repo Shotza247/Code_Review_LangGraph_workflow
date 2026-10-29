@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from ..utils.chains import invoke_prompt
 from ..utils.mermaid import validate_mermaid
 from ..utils.outputs import save_json, save_text
 from ..utils.prompts import SYSTEM, render
@@ -43,7 +44,7 @@ def make_diagrams(ctx):
         )
         code = None
         for _ in range(2):  # one retry if the output does not look like Mermaid at all
-            code = _extract_mermaid(ctx.llm.generate(prompt, system=SYSTEM))
+            code = _extract_mermaid(invoke_prompt(ctx.llm, prompt))
             if code:
                 break
         if not code:
@@ -58,7 +59,7 @@ def make_diagrams(ctx):
             repair = render(
                 "diagram_repair", diagram_type=spec["type"], code=code, error=result.error
             )
-            fixed = _extract_mermaid(ctx.llm.generate(repair, system=SYSTEM))
+            fixed = _extract_mermaid(invoke_prompt(ctx.llm, repair))
             if fixed:
                 code = fixed
         return None, None, "validation loop ended unexpectedly", None
@@ -99,6 +100,7 @@ def make_diagrams(ctx):
                 "sampled_files": len(state.get("sampled_files", [])),
                 "code_review_findings": len(state.get("code_review", {}).get("findings", [])),
                 "reproducibility_status": state.get("reproducibility_report", {}).get("status", "unknown"),
+                "course_mode": state.get("course_mode", "unknown"),
                 "diagrams": list(diagrams),
                 "diagrams_rendered_with_mmdc": list(svgs),
                 "errors": errors,

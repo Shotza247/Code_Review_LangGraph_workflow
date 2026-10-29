@@ -1,3 +1,4 @@
+from .chains import invoke_prompt
 from .json_utils import extract_json
 from .prompts import SYSTEM
 
@@ -8,7 +9,7 @@ def format_rubric(rubric: dict) -> str:
 
 def llm_json(llm, prompt: str) -> dict:
     """Call the LLM and parse JSON, with one repair retry."""
-    raw = llm.generate(prompt, system=SYSTEM)
+    raw = invoke_prompt(llm, prompt)
     try:
         return extract_json(raw)
     except ValueError as exc:
@@ -19,7 +20,7 @@ def llm_json(llm, prompt: str) -> dict:
             + f"JSON parse error: {exc}\n\nInvalid reply excerpt:\n<<<\n{raw[:3000]}\n>>>"
         )
         try:
-            return extract_json(llm.generate(retry, system=SYSTEM))
+            return extract_json(invoke_prompt(llm, retry))
         except ValueError as retry_exc:
             raise ValueError(f"Model did not return valid JSON after repair retry: {retry_exc}") from retry_exc
 
