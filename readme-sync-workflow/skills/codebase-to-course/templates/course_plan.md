@@ -1,9 +1,9 @@
 # Course plan: <project name>
 
+> Reference template for a longer standalone planning draft. The current workflow generates the selected step-by-step or interactive format instead.
+
 **Audience:** <one line>
 **Difficulty:** <Beginner | Intermediate | Advanced, based on repository evidence>
-**Estimated time:** <hours>
-
 ## Evidence used
 - **Code summary:** <one-line summary of what shaped the plan>
 - **README gaps:** <one-line summary>

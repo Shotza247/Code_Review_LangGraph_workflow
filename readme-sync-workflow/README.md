@@ -1,27 +1,27 @@
 # readme-sync-workflow
 
-A LangGraph workflow that audits a public GitHub repo's README for reproducibility, performs an evidence-based codebase analysis, and produces an improved README, either an interactive course or a concise step-by-step guide, and Mermaid diagrams. Optionally opens a pull request.
+A LangGraph workflow that audits a public GitHub repo's README for reproducibility, performs an evidence-based codebase analysis, and produces an improved README, either an interactive course or a concise step-by-step study plan, and Mermaid diagrams. Optionally opens a pull request.
 
 ## Pipeline
 
-The workflow is a LangGraph `StateGraph`: each node reads and writes shared `RepoState`. After assessment, the Streamlit app pauses and lets the user choose exactly one output: a linked interactive course or a concise step-by-step guide.
+The workflow is a LangGraph `StateGraph`: each node reads and writes shared `RepoState`. After assessment, it drafts an improved README and then the Streamlit app pauses for one choice: a linked interactive course or a concise step-by-step study plan.
 
 ```mermaid
 flowchart LR
   A[readme_audit] -->|readme_original + readme_rating_v1| B[codebase_analysis]
 
-  B --> C{course_choice}
-  B -. assessment artifacts .-> C
+  B -->|assessment_complete| E[readme_sync]
+  E -->|readme_draft| C{course_choice}
   C -->|interactive| D[course_plan]
-  C -->|guide| G[course_guide]
+  C -->|step-by-step| G[course_guide]
   C -->|await user choice| H((pause))
-  D -->|course_plan| E[readme_sync]
-  G -->|guide| E
-  E -->|readme_synced| F[diagrams]
-  F -->|README with Mermaid diagrams| I[outputs]
-  F -->|pr.mode = fork or direct| J[open_pr]
-  F -->|pr.mode = off| K((END))
-  J -->|pr_url| K
+  D --> F[readme_finalize]
+  G --> F
+  F -->|readme_synced| I[diagrams]
+  I -->|README with Mermaid diagrams| J[outputs]
+  I -->|pr.mode = fork or direct| K[open_pr]
+  I -->|pr.mode = off| L((END))
+  K -->|pr_url| L
 ```
 
 ### StateGraph flow
@@ -30,13 +30,14 @@ flowchart LR
 stateDiagram-v2
   [*] --> readme_audit
   readme_audit --> codebase_analysis
-  codebase_analysis --> course_choice
+  codebase_analysis --> readme_sync
+  readme_sync --> course_choice
   course_choice --> course_plan: interactive selected
   course_choice --> course_guide: step-by-step selected
   course_choice --> [*]: awaiting Streamlit selection
-  course_plan --> readme_sync
-  course_guide --> readme_sync
-  readme_sync --> diagrams
+  course_plan --> readme_finalize
+  course_guide --> readme_finalize
+  readme_finalize --> diagrams
   diagrams --> open_pr: pr.mode = fork/direct
   diagrams --> [*]: pr.mode = off
   open_pr --> [*]
@@ -55,11 +56,12 @@ stateDiagram-v2
 | Node | Job | Writes to state |
 |---|---|---|
 | `readme_audit` | Fetch README, rate it with `rubrics/reproducibility.yaml` | `readme_rating_v1` |
-| `codebase_analysis` | Sample code and perform one consolidated, evidence-based assessment of README gaps, code-review findings, reproducibility, and architecture; re-rate the README | `code_summary`, `gap_report`, `code_review`, `reproducibility_report`, `code_understanding`, `readme_rating_v2` |
-| `course_choice` | Record the selected course format; pause after assessment in Streamlit until the user chooses | `audit_log` |
-| `course_plan` | Create an interactive course index and linked lesson files using the assessment artifacts | `course_plan`, `interactive_course` |
-| `course_guide` | Create a concise step-by-step guide using assessment evidence | `course_plan`, `step_by_step_guide` |
-| `readme_sync` | Rewrite the README from gaps + summary + course plan | `readme_synced` |
+| `codebase_analysis` | Sample code and perform one consolidated assessment; re-rate the README. Empty model summaries fall back to mapped evidence and are reported. | `assessment_complete`, `code_summary`, `gap_report`, `code_review`, `reproducibility_report`, `code_understanding`, `readme_rating_v2` |
+| `readme_sync` | Draft the improved README from gaps, summary, and compact repository evidence before the format choice | `readme_draft` |
+| `course_choice` | Record the selected learning format; pause after the README draft until the user chooses | `audit_log` |
+| `course_plan` | Create an interactive course index and linked lesson files using the README draft and assessment artifacts | `course_plan`, `interactive_course` |
+| `course_guide` | Create a concise step-by-step study plan using the README draft and assessment evidence | `course_plan`, `step_by_step_guide` |
+| `readme_finalize` | Insert and verify the link to the selected learning artifact without another LLM call | `readme_synced` |
 | `diagrams` | Generate Mermaid diagrams, validate with mmdc (with LLM repair), splice into the README | `diagrams`, `diagram_svgs` |
 | `open_pr` (optional) | Fork or branch, commit, open a PR | `pr_url` |
 
@@ -73,7 +75,7 @@ Each audit event records:
 - `node`: the node that ran or made the decision.
 - `changed_keys`: state keys returned by the node.
 - `before` and `after`: compact summaries of changed state values, not full large strings.
-- `decision` and `reason` for conditional routing after `diagrams`.
+- `decision` and `reason` for conditional routing at `course_choice` and after `diagrams`.
 
 Example:
 
@@ -93,7 +95,7 @@ Course-format routing decisions are also recorded by `course_choice`.
 
 ## Codebase analysis workflow
 
-The `codebase_analysis` node runs before `course_plan` so course planning is grounded in repository evidence rather than README text alone. It uses a map-reduce workflow designed to stay efficient for small/free models:
+The `codebase_analysis` node runs before README drafting and course generation so outputs are grounded in repository evidence rather than README text alone. It uses a map-reduce workflow designed to stay efficient for small/free models:
 
 1. Fetch the repository tree and select a prioritized sample of manifests, entry points, configs, CI files, and source files.
 2. Read bounded snippets from sampled files to avoid oversized prompts.
@@ -105,20 +107,43 @@ The `codebase_analysis` node runs before `course_plan` so course planning is gro
    - `reproducibility_report.json` for discovered setup, run, test, configuration, and verification evidence.
    - `code_understanding.json` for main flow, components, data flow, and unknowns.
 6. Re-rate the README using the code-backed gap report.
-7. Pass the compact assessment state into the selected course output node. Streamlit pauses here for user selection; only the selected branch makes a course-generation call.
+7. Draft the improved README using the assessment and compact supporting evidence. If summary reduction returns empty text, mapped notes or the repository tree are used and an error is added to the run state.
+8. Pause Streamlit with `assessment_complete` and `readme_draft` in state. Resume routing uses these explicit state markers, not whether `code_summary` is truthy, so a selected format never repeats repository assessment.
+9. Generate only the selected course output from the README draft and bounded assessment evidence. Finalize the README link deterministically after the artifact exists.
 
 The analysis is static: repository code is read but not executed, and commands are reported as documented evidence rather than verified results.
 
 ## Choose the learning format
 
-After `codebase_analysis`, Streamlit offers two options:
+After `readme_sync` drafts the README, Streamlit offers two options:
 
 - **Interactive course:** Creates `docs/interactive-course/index.md` and separate lesson Markdown files under `docs/interactive-course/lessons/`, with navigation, exercises, and checkpoints. Its skill is `skills/codebase-to-interactive-course/SKILL.md`.
-- **Step-by-step guide:** Creates a short numbered guide using documented setup and code-flow evidence.
+- **Step-by-step study plan:** Creates a short numbered plan using the draft for orientation and documented setup/code-flow evidence as the technical source of truth. Its skill is `skills/codebase-to-study-plan/SKILL.md`.
 
-Both branches use the same compact assessment state. The simpler guide branch is the CLI default; choose the interactive option in Streamlit or pass `--course-mode interactive` on the CLI.
+Both branches use the same compact assessment state. The selected artifact is linked into the README without a second README-generation call. The simpler study-plan branch is the CLI default; choose the interactive option in Streamlit or pass `--course-mode interactive` on the CLI.
 
-Token use is reduced by selecting only one output branch and bounding the assessment context. The `skills/token-efficient-readme-sync/SKILL.md` documents the broader rules. LangChain LCEL is used to compose prompt rendering and model invocation; token savings come from bounded inputs and skipped duplicate calls, not from chaining by itself.
+Token use is reduced by selecting only one learning-output branch, loading only its skills, bounding downstream context, and avoiding another model call for README link insertion. The study-plan node validates 5-8 consecutive steps with action/checkpoint labels; the interactive-course node validates 3-5 lessons and a capstone. README finalization checks required sections and order, confirms the selected artifact and interactive lessons exist, and verifies the link marker was replaced. Invalid structure is surfaced as an error rather than silently accepted; no extra LLM reviewer or automatic repair call is made for these artifact checks. The `skills/token-efficient-readme-sync/SKILL.md` documents the broader rules. LangChain LCEL composes prompt rendering and model invocation; token savings come from bounded inputs and skipped duplicate calls, not from chaining by itself.
+
+## Skills and LLM calls
+
+The workflow uses local Markdown skills as prompt instructions—not as separate agents, tools, or model calls. The shared `codebase-to-course` skill and exactly one mode-specific skill are loaded only after that learning branch is selected. Their instruction text is inserted into that branch's generation prompt. The unselected mode's skill is not read or sent to the model. The `token-efficient-readme-sync` skill documents implementation guidance; it is not injected into runtime prompts.
+
+| Workflow step | Prompt/model work | Skills passed to the model |
+|---|---|---|
+| README audit | `readme_audit`; structured rating, with one JSON-repair call if parsing fails | None |
+| Codebase analysis | `code_map` once per selected-file batch; `code_reduce`; `repository_assessment`; `readme_rerate` | None |
+| Assessment fallback | `gap_analysis` only if the consolidated assessment response cannot be parsed | None |
+| README draft | `readme_sync`, using original README, gaps, summary, and compact review/reproducibility/architecture evidence | None |
+| Step-by-step output | One `course_guide` generation call | `codebase-to-course` + `codebase-to-study-plan` |
+| Interactive output | One `interactive_course` generation call; the returned Markdown is split into the index and lesson files deterministically | `codebase-to-course` + `codebase-to-interactive-course` |
+| README finalization | Deterministic link insertion and artifact checks; no LLM call | None |
+| Diagrams | `diagram` for each configured diagram; an extraction retry and bounded `diagram_repair` calls may occur when needed | None |
+
+`build_llm` creates the configured Hugging Face or OpenAI adapter, and graph nodes use the shared `LLMAdapter` interface and system instruction. Model name, per-response `max_tokens`, and temperature are configured in `config/settings.yaml`; credentials come from the corresponding API-key input or `.env` (`HF_TOKEN` or `OPENAI_API_KEY`). `max_tokens` is a response limit, not a total-run budget. Provider failures receive up to three attempts with exponential backoff, except HTTP 400/401/403/404 errors; JSON-producing calls may additionally use one parse-repair call.
+
+For a normal run without retries, the approximate number of model requests is **6 + code-map batches + configured diagrams**. Extra requests can come from JSON repair, malformed-assessment fallback, diagram extraction retries, and Mermaid repair. Skill loading itself is local file I/O and does not call the model. The adapters expose no total-run token budget in this workflow, so exact token totals depend on model/provider usage and generated response lengths. The graph does not run a separate LLM reviewer by default.
+
+The standalone `course_plan.md` prompt and `skills/codebase-to-course/templates/course_plan.md` template are retained as references for a longer generic planning draft; the current graph does not invoke that prompt or emit that extra artifact. For the live output, the two mode-specific prompts and skills above are authoritative.
 
 ## Quickstart
 
@@ -127,7 +152,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # add HF_TOKEN and/or OPENAI_API_KEY
 
-python run.py https://github.com/owner/repo                  # concise step-by-step guide
+python run.py https://github.com/owner/repo                  # concise step-by-step study plan
 python run.py https://github.com/owner/repo --course-mode interactive
 python run.py https://github.com/owner/repo --provider openai
 python run.py https://github.com/owner/repo --pr fork        # needs GITHUB_TOKEN
@@ -137,7 +162,7 @@ python -m pytest -q tests                                    # no network or API
 
 ## Streamlit UI
 
-`streamlit run app.py`, then paste a public repo URL. The sidebar picks the provider/model and takes optional API keys (kept in the session only; empty fields fall back to `.env`). The workflow first runs README and codebase analysis, then pauses with the assessment available while you choose a course format. Selecting an option resumes from stored state; completed assessment calls are not repeated. Results appear as tabs: ratings, gaps, code analysis, new README, course plan/guide, diagrams, and pull request. Nothing is written to GitHub until you choose fork or direct on the Pull request tab, tick the confirmation box, and click the button (needs a GitHub token).
+`streamlit run app.py`, then paste a public repo URL. The sidebar picks the provider/model and takes optional API keys (kept in the session only; empty fields fall back to `.env`). The workflow assesses the repo, drafts a README, then pauses with both available while you choose a learning format. Selecting an option resumes from stored state; completed assessment calls are not repeated. Results appear as tabs: ratings, gaps, code analysis, README draft/new README, course plan/study plan, diagrams, and pull request. Nothing is written to GitHub until you choose fork or direct on the Pull request tab, tick the confirmation box, and click the button (needs a GitHub token).
 
 ## Mermaid validation (mmdc)
 
@@ -155,7 +180,7 @@ npm install -g @mermaid-js/mermaid-cli
 
 In Docker, as root, or on WSL, mmdc's headless browser may refuse to start. Set `puppeteer_config: config/puppeteer-config.json` (it disables the browser sandbox, so use it only in environments you trust).
 
-Results land in `outputs/<owner>__<repo>/`: `README.new.md`, `audit.json`, `audit_log.json`, `gap_report.json`, `code_review.json`, `reproducibility_report.json`, `code_understanding.json`, and the selected course artifact. Interactive mode also creates `docs/interactive-course/index.md` and `docs/interactive-course/lessons/*.md`. Mermaid sources are saved to `diagrams/*.mmd` (and `*.svg` when mmdc is installed), with a `run_summary.json`. The code review is static and limited to sampled files; setup, run, and test commands are discovered from repository evidence and are not executed.
+Results land in `outputs/<owner>__<repo>/`: `README.draft.md`, finalized `README.new.md`, `audit.json`, `audit_log.json`, `gap_report.json`, `code_review.json`, `reproducibility_report.json`, `code_understanding.json`, and the selected learning artifact. The step-by-step study plan is also written to the configured `pr.course_plan_path`; interactive mode creates `docs/interactive-course/index.md` and `docs/interactive-course/lessons/*.md`. Mermaid sources are saved to `diagrams/*.mmd` (and `*.svg` when mmdc is installed), with a `run_summary.json`. The code review is static and limited to sampled files; setup, run, and test commands are discovered from repository evidence and are not executed.
 
 ## Reusing this for another project
 
@@ -163,9 +188,10 @@ Results land in `outputs/<owner>__<repo>/`: `README.new.md`, `audit.json`, `audi
 |---|---|
 | LLM provider or model | `config/settings.yaml` (`llm`) or add an adapter in `src/readme_sync/llm/` |
 | What "good" means | `rubrics/*.yaml` |
-| How the step-by-step guide is shaped | `src/readme_sync/prompts/course_guide.md` |
-| Interactive course format | `skills/codebase-to-interactive-course/` |
-| Token-efficiency guidelines | `skills/token-efficient-readme-sync/` |
+| Shared learning rules | `skills/codebase-to-course/SKILL.md` |
+| Step-by-step study plan | `src/readme_sync/prompts/course_guide.md`, `skills/codebase-to-course/SKILL.md`, and `skills/codebase-to-study-plan/SKILL.md` |
+| Interactive course format | `src/readme_sync/prompts/interactive_course.md` and `skills/codebase-to-interactive-course/SKILL.md` |
+| Token-efficiency implementation guidance | `skills/token-efficient-readme-sync/SKILL.md` |
 | Which diagrams are made | `config/settings.yaml` (`diagrams`) |
 | Wording of any LLM step | `src/readme_sync/prompts/*.md` |
 | Audit-log summaries | `src/readme_sync/utils/audit.py` |

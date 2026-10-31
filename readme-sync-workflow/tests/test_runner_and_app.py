@@ -16,9 +16,10 @@ def test_stream_run_order_and_state(tmp_path):
     assert [n for n, _ in steps] == [
         "readme_audit",
         "codebase_analysis",
+        "readme_sync",
         "course_choice",
         "course_guide",
-        "readme_sync",
+        "readme_finalize",
         "diagrams",
     ]
     final = steps[-1][1]
@@ -41,9 +42,17 @@ def test_stream_run_pauses_after_assessment_and_resumes_selected_branch(tmp_path
         )
     )
     assessment_state = first_pass[-1][1]
-    assert [node for node, _ in first_pass] == ["readme_audit", "codebase_analysis", "course_choice"]
+    assert [node for node, _ in first_pass] == [
+        "readme_audit",
+        "codebase_analysis",
+        "readme_sync",
+        "course_choice",
+    ]
     assert assessment_state["audit_log"][-2]["event"] == "route_decision"
     assert "course_plan" not in assessment_state
+    assert assessment_state["assessment_complete"] is True
+    assert "readme_draft" in assessment_state
+    repo_reads = gh.get_repo_calls
 
     resumed = list(
         stream_run(
@@ -51,10 +60,17 @@ def test_stream_run_pauses_after_assessment_and_resumes_selected_branch(tmp_path
             "https://github.com/o/r",
             llm=llm,
             gh=gh,
-            initial_state={**assessment_state, "course_mode": "interactive"},
+            initial_state={**assessment_state, "code_summary": "", "course_mode": "interactive"},
         )
     )
-    assert [node for node, _ in resumed] == ["course_choice", "course_plan", "readme_sync", "diagrams"]
+    assert [node for node, _ in resumed] == [
+        "course_choice",
+        "course_plan",
+        "readme_finalize",
+        "diagrams",
+    ]
+    assert gh.get_repo_calls == repo_reads
+    assert llm.tasks.count("repository_assessment") == 1
     assert resumed[-1][1]["course_mode"] == "interactive"
 
 
@@ -101,6 +117,7 @@ def test_app_full_run_then_pr_gate(monkeypatch):
         assert not at.exception, at.exception
         assert not at.error, [e.value for e in at.error]
         assert "code_summary" in at.session_state["result"]
+        assert "readme_draft" in at.session_state["result"]
         assert "course_plan" not in at.session_state["result"]
         course_format = [r for r in at.radio if r.label == "Course format"][0]
         course_format.set_value("Step-by-step guide").run()

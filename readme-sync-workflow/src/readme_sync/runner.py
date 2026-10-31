@@ -7,8 +7,9 @@ NODE_LABELS = {
     "codebase_analysis": "Reviewing code, reproducibility, and architecture",
     "course_choice": "Recording course format decision",
     "course_plan": "Creating the interactive course",
-    "course_guide": "Creating the step-by-step guide",
-    "readme_sync": "Writing the synchronized README",
+    "course_guide": "Creating the step-by-step study plan",
+    "readme_sync": "Drafting the improved README",
+    "readme_finalize": "Linking and validating the learning artifact",
     "diagrams": "Generating and validating Mermaid diagrams",
     "open_pr": "Opening the pull request",
 }

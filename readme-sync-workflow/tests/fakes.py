@@ -65,9 +65,20 @@ class FakeLLM(LLMAdapter):
                 "inaccurate": [],
                 "covered_well": [],
             }),
-            "course_guide": "# Step-by-step guide\n\n1. Inspect `main.py`.\n",
+            "course_guide": (
+                "# Step-by-step study plan\n\n"
+                "1. **Action:** Read `README.md`.\n   **Checkpoint:** Summarize the project.\n"
+                "2. **Action:** Inspect `main.py`.\n   **Checkpoint:** Find the entry point.\n"
+                "3. **Action:** Review `requirements.txt`.\n   **Checkpoint:** List dependencies.\n"
+                "4. **Action:** Examine project flow.\n   **Checkpoint:** Trace the main path.\n"
+                "5. **Action:** Review available checks.\n   **Checkpoint:** Identify unknowns.\n"
+            ),
             "interactive_course": (
                 "# Interactive course: demo\n\n"
+                "## Course navigation\n\n"
+                "- [Lesson 1: Repository map](#lesson-1-repository-map)\n"
+                "- [Lesson 2: Run and verify](#lesson-2-run-and-verify)\n"
+                "- [Lesson 3: Extend the project](#lesson-3-extend-the-project)\n\n"
                 "## Lesson 1: Repository map\n\n"
                 "Goal: Find the entry point.\n\n"
                 "Files: `main.py`.\n\n"
@@ -78,10 +89,31 @@ class FakeLLM(LLMAdapter):
                 "Files: `requirements.txt`.\n\n"
                 "Exercise: Review setup evidence.\n\n"
                 "Checkpoint: List unknown setup details.\n"
+                "## Lesson 3: Extend the project\n\n"
+                "Goal: Identify a safe extension.\n\n"
+                "Files: `main.py`.\n\n"
+                "Exercise: Propose a small change.\n\n"
+                "Checkpoint: Explain the expected effect.\n\n"
+                "## Capstone\n\n"
+                "Trace the project from setup evidence to its main flow.\n"
             ),
             "readme_rerate": "```json\n" + json.dumps(RATING) + "\n```",  # fenced on purpose
             "course_plan": "# Course plan: demo",
-            "readme_sync": "# Demo\n\n## Project structure\n\n<!-- DIAGRAMS:START -->\n<!-- DIAGRAMS:END -->\n",
+            "readme_sync": (
+                "# Demo\n\n"
+                "## Overview\n\nDemo.\n\n"
+                "## Prerequisites\n\nTODO: confirm.\n\n"
+                "## Installation\n\nTODO: confirm.\n\n"
+                "## Configuration\n\nTODO: confirm.\n\n"
+                "## Usage\n\nTODO: confirm.\n\n"
+                "## Expected output\n\nTODO: confirm.\n\n"
+                "## Verify your setup\n\nTODO: confirm.\n\n"
+                "## Project structure\n\n"
+                "<!-- DIAGRAMS:START -->\n<!-- DIAGRAMS:END -->\n\n"
+                "## Learn the codebase\n\n- Inspect `main.py`.\n\n"
+                "<!-- COURSE_PLAN_LINK -->\n\n"
+                "## Troubleshooting\n\nTODO: confirm.\n"
+            ),
             "diagram": MERMAID,
             "diagram_repair": MERMAID,
         }[task]
@@ -92,8 +124,10 @@ class FakeGH:
 
     def __init__(self):
         self.calls = []
+        self.get_repo_calls = 0
 
     def get_repo(self, o, r):
+        self.get_repo_calls += 1
         return {"default_branch": "main"}
 
     def get_readme(self, o, r, ref):

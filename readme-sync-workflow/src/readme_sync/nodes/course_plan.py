@@ -6,10 +6,11 @@ from ..utils.skill_loader import load_skill
 
 
 def make_course_plan(ctx):
-    skill = load_skill("codebase-to-interactive-course")
     max_lines = ctx.settings["github"]["max_tree_lines"]
 
     def course_plan_node(state: dict) -> dict:
+        shared_skill = load_skill("codebase-to-course")
+        interactive_course_skill = load_skill("codebase-to-interactive-course")
         assessment = {
             "gap_report": state["gap_report"],
             "code_review": state["code_review"],
@@ -19,14 +20,20 @@ def make_course_plan(ctx):
         source = generate_prompt(
             ctx.llm,
             "interactive_course",
-            skill_instructions=skill["instructions"],
+            shared_skill_instructions=shared_skill,
+            mode_skill_instructions=interactive_course_skill,
             tree="\n".join(state["file_tree"][:max_lines])[:4000],
             code_summary=state["code_summary"][:2500],
+            readme_draft=state.get("readme_draft", "")[:2500],
             assessment=compact_json(assessment),
         )
         headings = list(re.finditer(r"(?m)^## Lesson \d+:\s*(.+?)\s*$", source))
-        if not headings:
-            raise ValueError("Interactive course response did not contain lesson headings")
+        if not 3 <= len(headings) <= 5:
+            raise ValueError(
+                f"Interactive course response must contain 3-5 lesson headings; found {len(headings)}"
+            )
+        if not re.search(r"(?mi)^## Capstone\s*$", source):
+            raise ValueError("Interactive course response is missing its Capstone section")
 
         output_dir = state["output_dir"]
         lesson_dir = "docs/interactive-course/lessons"

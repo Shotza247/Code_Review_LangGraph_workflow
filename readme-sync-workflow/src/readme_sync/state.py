@@ -18,6 +18,7 @@ class RepoState(TypedDict, total=False):
     output_dir: str
 
     # node 2: codebase_analysis
+    assessment_complete: bool
     file_tree: list[str]
     sampled_files: list[str]
     code_summary: str
@@ -35,6 +36,7 @@ class RepoState(TypedDict, total=False):
     interactive_course: dict[str, Any]
 
     # node 4: readme_sync
+    readme_draft: str
     readme_synced: str
 
     # node 5: diagrams

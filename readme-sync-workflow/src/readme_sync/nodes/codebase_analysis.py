@@ -88,9 +88,12 @@ def make_codebase_analysis(ctx):
 
         # 3) reduce: one structured summary
         code_summary = generate_prompt(ctx.llm, "code_reduce", tree=tree_text, notes="\n\n".join(notes))
+        errors = list(state.get("errors", []))
+        if not code_summary.strip():
+            code_summary = "\n\n".join(notes).strip() or f"Repository file tree:\n{tree_text}"
+            errors.append("Code summary generation returned empty output; using mapped repository evidence.")
 
         # 4) assess documentation gaps, code quality, reproducibility, and architecture together
-        errors = list(state.get("errors", []))
         try:
             assessment = llm_json(
                 ctx.llm,
@@ -150,6 +153,7 @@ def make_codebase_analysis(ctx):
             "code_understanding": code_understanding,
             "readme_rating_v2": rating_v2,
             "errors": errors,
+            "assessment_complete": True,
         }
 
     return codebase_analysis_node

@@ -5,7 +5,9 @@ Rules:
 - Keep the project's real purpose and any accurate content from the original README.
 - Fix every gap and inaccuracy in the gap report. Use ONLY facts from the codebase summary. If a needed fact is unknown, write a visible "TODO:" line instead of inventing a command or version.
 - Use these sections in order: Overview, Prerequisites, Installation, Configuration, Usage, Expected output, Verify your setup, Project structure, Learn the codebase, Troubleshooting.
-- "Learn the codebase" is a short module list derived from the course plan, linking to $course_plan_path.
+- "Learn the codebase" is a short module list derived from the code summary and repository evidence.
+- Under "Learn the codebase", include this exact marker on its own line; the selected learning artifact link is inserted after the user chooses a format:
+<!-- COURSE_PLAN_LINK -->
 - Include this exact block, empty, after "Project structure" (it is filled in automatically later):
 <!-- DIAGRAMS:START -->
 <!-- DIAGRAMS:END -->
@@ -24,9 +26,9 @@ CODEBASE SUMMARY:
 $code_summary
 >>>
 
-COURSE PLAN:
+ADDITIONAL REPOSITORY EVIDENCE:
 <<<
-$course_plan
+$repository_evidence
 >>>
 
 Return only the new README in Markdown.

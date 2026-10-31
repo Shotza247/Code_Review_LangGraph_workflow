@@ -166,28 +166,35 @@ if result:
             st.write(understanding["unknowns"])
 
     with t_readme:
-        if "readme_synced" not in result:
-            st.info("Generate a course or guide first; the README is created immediately afterward.")
+        readme_text = result.get("readme_synced") or result.get("readme_draft")
+        if not readme_text:
+            st.info("The README draft will be created after repository assessment.")
         else:
+            if "readme_synced" not in result:
+                st.info("This README draft is ready. Its learning-artifact link will be added after you choose a format.")
             view = st.radio("View", ["Rendered", "Diff vs original", "Markdown source"], horizontal=True)
             if view == "Rendered":
-                st.markdown(result["readme_synced"])
+                st.markdown(readme_text)
             elif view == "Diff vs original":
                 diff = difflib.unified_diff(
                     result["readme_original"].splitlines(),
-                    result["readme_synced"].splitlines(),
+                    readme_text.splitlines(),
                     "README (original)",
-                    "README (new)",
+                    "README (draft)" if "readme_synced" not in result else "README (new)",
                     lineterm="",
                 )
                 st.code("\n".join(diff) or "No changes", language="diff")
             else:
-                st.code(result["readme_synced"], language="markdown")
-            st.download_button("Download README.new.md", result["readme_synced"], file_name="README.new.md")
+                st.code(readme_text, language="markdown")
+            st.download_button(
+                "Download README draft" if "readme_synced" not in result else "Download README.new.md",
+                readme_text,
+                file_name="README.draft.md" if "readme_synced" not in result else "README.new.md",
+            )
 
     with t_course:
         if "course_plan" not in result:
-            st.write("The repository assessment is ready. Choose how you want the learning material generated.")
+            st.write("The README draft and repository assessment are ready. Choose how you want the learning material generated.")
             mode = st.radio(
                 "Course format",
                 ["Step-by-step guide", "Interactive course"],
